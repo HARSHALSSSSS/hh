@@ -37,8 +37,8 @@ python-dotenv==1.0.0
 pydantic==2.5.0
 
 # Email notifications
-smtplib
 email-validator==2.1.0
+# smtplib is built-in to Python
 
 # Web driver for Selenium
 webdriver-manager==4.0.1

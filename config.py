@@ -96,6 +96,20 @@ class Config(BaseSettings):
     EMAIL_PASSWORD: str = ""
     NOTIFICATION_EMAILS: List[str] = []
     
+    # Email notification preferences
+    ENABLE_EMAIL_NOTIFICATIONS: bool = True
+    SEND_NEW_ARTICLES_ALERTS: bool = True
+    SEND_HIGH_RELEVANCE_ALERTS: bool = True
+    SEND_TRADING_SIGNAL_ALERTS: bool = True
+    SEND_TRADE_EXECUTION_ALERTS: bool = True
+    SEND_RISK_ALERTS: bool = True
+    SEND_DAILY_HEALTH_REPORTS: bool = True
+    
+    # Email frequency controls
+    MIN_ARTICLES_FOR_BATCH_EMAIL: int = 3  # Only send batch emails if >= 3 articles
+    HIGH_RELEVANCE_THRESHOLD_FOR_EMAIL: float = 0.8  # Send immediate alerts for articles above this score
+    MAX_EMAILS_PER_HOUR: int = 20  # Rate limiting for email alerts
+    
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = "biotech_trader.log"

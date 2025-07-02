@@ -23,6 +23,7 @@ from database import init_database, SessionLocal, Article, Company, Trade, Scrap
 from scraper import StockTitanScraper, PRNewswireScraper, BusinessWireScraper, YahooScraper
 from nlp import SentimentAnalyzer, BiotechExtractor
 from trading import AlpacaClient, TradingStrategy, RiskManager
+from notifications import email_notifier
 
 class BiotechTradingSystem:
     """Main biotech trading system orchestrator"""
@@ -188,6 +189,7 @@ class BiotechTradingSystem:
         """Save scraped articles to database with smart time window filtering"""
         new_articles_count = 0
         current_time = datetime.now()
+        new_articles_for_email = []  # Track articles for email notification
         
         logger.info(f"🔍 Processing {len(articles)} articles from {source} with smart time filtering...")
         
@@ -247,9 +249,19 @@ class BiotechTradingSystem:
                 self.db_session.add(article)
                 new_articles_count += 1
                 
+                # Add to email notification list with relevance score
+                article_data['relevance_score'] = relevance_score
+                new_articles_for_email.append(article_data)
+                
                 # Log high-relevance articles
                 if relevance_score >= 0.8:
                     logger.info(f"🎯 High-relevance article: {article_data.get('title', '')[:50]}... (score: {relevance_score:.2f})")
+                    
+                    # Send immediate high-relevance alert
+                    try:
+                        email_notifier.send_high_relevance_alert(article_data)
+                    except Exception as e:
+                        logger.error(f"Failed to send high-relevance email alert: {e}")
                 
             except Exception as e:
                 logger.error(f"Error processing article: {e}")
@@ -258,6 +270,17 @@ class BiotechTradingSystem:
         try:
             self.db_session.commit()
             logger.info(f"💾 Saved {new_articles_count} relevant articles from {source} (time window: ±{config.ARTICLE_TIME_BUFFER_MINUTES}min)")
+            
+            # Send email notification for new articles (if any)
+            if new_articles_for_email:
+                try:
+                    email_notifier.send_new_articles_alert(
+                        new_articles_for_email, source, new_articles_count
+                    )
+                    logger.info(f"📧 Email alert sent for {new_articles_count} new articles from {source}")
+                except Exception as e:
+                    logger.error(f"Failed to send new articles email alert: {e}")
+                    
         except Exception as e:
             logger.error(f"Error committing articles: {e}")
             self.db_session.rollback()
@@ -398,6 +421,14 @@ class BiotechTradingSystem:
             # Store signals for execution
             self._store_trading_signals(filtered_signals)
             
+            # Send email alerts for trading signals
+            for signal in filtered_signals:
+                try:
+                    email_notifier.send_trading_signal_alert(signal)
+                    logger.info(f"📧 Trading signal email sent for {signal.get('symbol')}")
+                except Exception as e:
+                    logger.error(f"Failed to send trading signal email alert: {e}")
+            
             logger.info(f"Generated {len(filtered_signals)} trading signals from {len(signals)} candidates")
         else:
             logger.info("No trading signals generated")
@@ -492,6 +523,24 @@ class BiotechTradingSystem:
                         'price': current_price,
                         'position_size': adjusted_signal['position_size']
                     })
+                    
+                    # Send email alert for executed trade
+                    try:
+                        trade_data = {
+                            'symbol': signal['symbol'],
+                            'action': signal['action'],
+                            'quantity': shares,
+                            'price': current_price,
+                            'order_id': order_result.get('id'),
+                            'stop_loss_price': signal.get('stop_loss'),
+                            'take_profit_price': signal.get('target_price'),
+                            'trade_reason': '; '.join(signal.get('reasoning', [])),
+                            'confidence_score': signal.get('confidence', 0)
+                        }
+                        email_notifier.send_trade_execution_alert(trade_data)
+                        logger.info(f"📧 Trade execution email sent for {signal['symbol']}")
+                    except Exception as e:
+                        logger.error(f"Failed to send trade execution email alert: {e}")
                     
                     executed_trades += 1
                     logger.info(f"Executed trade: {signal['action']} {shares} shares of {signal['symbol']}")
