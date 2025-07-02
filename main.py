@@ -84,27 +84,22 @@ class BiotechTradingSystem:
         logger.info("System stopped successfully!")
     
     def _schedule_jobs(self):
-        """Schedule all periodic tasks with flexible timing"""
-        logger.info("Setting up job scheduling with flexible timing...")
+        """Schedule all periodic tasks with smart 15-minute intervals and time window buffering"""
+        logger.info("Setting up job scheduling with smart time window system...")
         
-        # Main scraping with random offset for flexibility
-        def flexible_scraping():
+        # Main scraping every 15 minutes with small random offset
+        def smart_scraping():
             if self._is_scraping_time():
-                offset = random.randint(0, config.SCRAPE_OFFSET_MINUTES * 60)  # Random offset in seconds
-                time.sleep(offset)
+                # Small random offset to avoid exact timing conflicts
+                offset = random.randint(0, config.SCRAPE_OFFSET_SECONDS)
+                if offset > 0:
+                    time.sleep(offset)
                 self._run_news_scraping()
         
-        # Schedule regular scraping every 10 minutes with random offset
-        schedule.every(config.SCRAPE_INTERVAL_MINUTES).minutes.do(flexible_scraping)
+        # Schedule regular scraping every 15 minutes as requested
+        schedule.every(config.SCRAPE_INTERVAL_MINUTES).minutes.do(smart_scraping)
         
-        # Schedule rapid scraping during high-activity periods
-        if config.RAPID_SCRAPE_ENABLED:
-            for rapid_time in config.RAPID_SCRAPE_INTERVALS:
-                schedule.every().day.at(rapid_time.strftime("%H:%M")).do(
-                    lambda: self._run_news_scraping() if self._is_scraping_time() else None
-                )
-        
-        # Enhanced processing schedule - every 5 minutes
+        # Enhanced processing schedule - every 5 minutes to process any articles we found
         schedule.every(5).minutes.do(
             lambda: self._process_unprocessed_articles() if self._is_scraping_time() else None
         )
@@ -127,8 +122,8 @@ class BiotechTradingSystem:
             lambda: self._check_portfolio_rebalancing() if self._is_trading_time() else None
         )
         
-        logger.info(f"Scheduled jobs: Scraping every {config.SCRAPE_INTERVAL_MINUTES}min + rapid intervals")
-        logger.info(f"Rapid scraping times: {[t.strftime('%H:%M') for t in config.RAPID_SCRAPE_INTERVALS]}")
+        logger.info(f"✅ Scheduled: {config.SCRAPE_INTERVAL_MINUTES}-minute intervals with smart time buffering")
+        logger.info(f"⏰ Time window: ±{config.ARTICLE_TIME_BUFFER_MINUTES} minutes from scraping time")
     
     def _run_scheduler(self):
         """Run the job scheduler"""
@@ -190,25 +185,40 @@ class BiotechTradingSystem:
         logger.info(f"Scraping completed: {total_new} new articles out of {total_articles} total")
     
     def _save_articles(self, articles: List[Dict[str, Any]], source: str) -> int:
-        """Save scraped articles to database with enhanced freshness filtering"""
+        """Save scraped articles to database with smart time window filtering"""
         new_articles_count = 0
         current_time = datetime.now()
         
+        logger.info(f"🔍 Processing {len(articles)} articles from {source} with smart time filtering...")
+        
         for article_data in articles:
             try:
-                # Check article freshness
+                # Parse article published time
                 published_date = article_data.get('published_date', current_time)
                 if isinstance(published_date, str):
                     try:
                         published_date = datetime.strptime(published_date, "%Y-%m-%d %H:%M:%S")
                     except:
-                        published_date = current_time
+                        try:
+                            published_date = datetime.strptime(published_date, "%Y-%m-%d")
+                        except:
+                            published_date = current_time
                 
+                # Check if article is within our smart time window
+                if not self._is_article_in_time_window(published_date, current_time):
+                    continue  # Skip articles outside time window
+                
+                # Check article age (don't process very old articles)
                 age_hours = (current_time - published_date).total_seconds() / 3600
                 if age_hours > config.MAX_ARTICLE_AGE_HOURS:
                     continue  # Skip old articles
                 
-                # Enhanced duplicate check
+                # Calculate relevance score and filter by threshold
+                relevance_score = self._calculate_article_relevance_score(article_data)
+                if relevance_score < config.ARTICLE_RELEVANCE_SCORE_THRESHOLD:
+                    continue  # Skip low-relevance articles
+                
+                # Enhanced duplicate check within time window
                 cutoff_time = current_time - timedelta(hours=config.DUPLICATE_CHECK_HOURS)
                 existing = self.db_session.query(Article).filter(
                     and_(
@@ -218,9 +228,9 @@ class BiotechTradingSystem:
                 ).first()
                 
                 if existing:
-                    continue
+                    continue  # Skip duplicates
                 
-                # Create new article
+                # Create new article with relevance score
                 article = Article(
                     title=article_data.get('title', ''),
                     summary=article_data.get('summary', ''),
@@ -230,16 +240,24 @@ class BiotechTradingSystem:
                     is_biotech_relevant=article_data.get('is_biotech_relevant', False)
                 )
                 
+                # Store relevance score in the article (if your Article model supports it)
+                if hasattr(article, 'relevance_score'):
+                    article.relevance_score = relevance_score
+                
                 self.db_session.add(article)
                 new_articles_count += 1
                 
+                # Log high-relevance articles
+                if relevance_score >= 0.8:
+                    logger.info(f"🎯 High-relevance article: {article_data.get('title', '')[:50]}... (score: {relevance_score:.2f})")
+                
             except Exception as e:
-                logger.error(f"Error saving article: {e}")
+                logger.error(f"Error processing article: {e}")
                 continue
         
         try:
             self.db_session.commit()
-            logger.info(f"Saved {new_articles_count} fresh articles from {source}")
+            logger.info(f"💾 Saved {new_articles_count} relevant articles from {source} (time window: ±{config.ARTICLE_TIME_BUFFER_MINUTES}min)")
         except Exception as e:
             logger.error(f"Error committing articles: {e}")
             self.db_session.rollback()
@@ -660,6 +678,72 @@ class BiotechTradingSystem:
             if allocation > config.MAX_POSITION_SIZE:
                 logger.warning(f"Position {position['symbol']} exceeds max allocation: "
                              f"{allocation:.1%} > {config.MAX_POSITION_SIZE:.1%}")
+
+    def _is_article_in_time_window(self, article_time: datetime, scrape_time: datetime) -> bool:
+        """Check if article was published within the smart time window"""
+        if not config.ENABLE_SMART_TIME_FILTERING:
+            return True
+        
+        # Calculate time difference
+        time_diff = abs((article_time - scrape_time).total_seconds() / 60)  # in minutes
+        
+        # Article is valid if published within our lookback window
+        return time_diff <= config.ARTICLE_LOOKBACK_WINDOW_MINUTES
+
+    def _calculate_article_relevance_score(self, article: Dict[str, Any]) -> float:
+        """Calculate relevance score for biotech articles with keyword matching"""
+        title = article.get('title', '').lower()
+        summary = article.get('summary', '').lower()
+        content = article.get('content', '').lower()
+        
+        combined_text = f"{title} {summary} {content}"
+        
+        # High-priority biotech keywords (higher weight)
+        high_priority_keywords = [
+            'fda approval', 'clinical trial', 'phase iii', 'phase 3', 'breakthrough therapy',
+            'drug approval', 'biotech', 'pharmaceutical', 'p-value', 'significant result',
+            'gene therapy', 'immunotherapy', 'cancer treatment', 'orphan drug',
+            'fast track', 'priority review', 'biologics', 'vaccine', 'antibody'
+        ]
+        
+        # Medium-priority keywords
+        medium_priority_keywords = [
+            'phase ii', 'phase 2', 'phase i', 'phase 1', 'clinical study',
+            'therapeutic', 'treatment', 'medical device', 'diagnostic',
+            'oncology', 'cardiology', 'neurology', 'rare disease'
+        ]
+        
+        # Company and regulatory keywords
+        regulatory_keywords = [
+            'fda', 'ema', 'regulatory', 'approval', 'clearance', 'designation',
+            'pipeline', 'clinical development', 'trial results', 'endpoint'
+        ]
+        
+        score = 0.0
+        
+        # Count high-priority keywords (weight: 0.3 each)
+        for keyword in high_priority_keywords:
+            if keyword in combined_text:
+                score += 0.3
+        
+        # Count medium-priority keywords (weight: 0.2 each)
+        for keyword in medium_priority_keywords:
+            if keyword in combined_text:
+                score += 0.2
+        
+        # Count regulatory keywords (weight: 0.15 each)
+        for keyword in regulatory_keywords:
+            if keyword in combined_text:
+                score += 0.15
+        
+        # Boost score if multiple biotech terms appear
+        biotech_terms_count = sum(1 for kw in ['biotech', 'pharmaceutical', 'clinical', 'drug', 'therapy'] 
+                                 if kw in combined_text)
+        if biotech_terms_count >= 2:
+            score += 0.2
+        
+        # Cap score at 1.0
+        return min(score, 1.0)
 
 def main():
     """Main entry point"""

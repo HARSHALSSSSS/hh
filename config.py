@@ -9,25 +9,25 @@ class Config(BaseSettings):
     # Database settings
     DATABASE_URL: str = "sqlite:///biotech_trader.db"
     
-    # Scraping settings
-    SCRAPE_INTERVAL_MINUTES: int = 10
-    SCRAPE_START_TIME: time = time(6, 30)
-    SCRAPE_END_TIME: time = time(16, 30)
+    # Scraping settings - RESTORED TO 15 MINUTES WITH SMART TIME WINDOW
+    SCRAPE_INTERVAL_MINUTES: int = 15  # Back to 15 minutes as requested
+    SCRAPE_START_TIME: time = time(7, 0)  # 7:00 AM
+    SCRAPE_END_TIME: time = time(16, 0)   # 4:00 PM
     
-    # NEW: Flexible timing settings
-    SCRAPE_OFFSET_MINUTES: int = 2
-    RAPID_SCRAPE_ENABLED: bool = True
-    RAPID_SCRAPE_INTERVALS: List[time] = [
-        time(8, 0),
-        time(9, 30),
-        time(12, 0),
-        time(15, 0),
-        time(16, 0),
-    ]
+    # SMART ARTICLE TIME WINDOW SYSTEM
+    ARTICLE_TIME_BUFFER_MINUTES: int = 5  # Look for articles released 5 min before/after our scraping
+    ARTICLE_LOOKBACK_WINDOW_MINUTES: int = 20  # Total window: last 20 minutes (15 + 5 buffer)
+    ENABLE_SMART_TIME_FILTERING: bool = True  # Enable intelligent time-based article filtering
     
-    # Article freshness settings
-    MAX_ARTICLE_AGE_HOURS: int = 2
-    DUPLICATE_CHECK_HOURS: int = 24
+    # Enhanced timing settings for article detection
+    SCRAPE_OFFSET_SECONDS: int = 30  # Small random offset (30 seconds max) to avoid exact timing conflicts
+    RAPID_SCRAPE_ENABLED: bool = False  # Disabled as requested - keeping 15 min interval
+    RAPID_SCRAPE_INTERVALS: List[time] = []  # Empty - no rapid scraping
+    
+    # Article freshness and relevance settings  
+    MAX_ARTICLE_AGE_HOURS: int = 2  # Only process articles published within last 2 hours
+    DUPLICATE_CHECK_HOURS: int = 24  # Check for duplicates within 24 hours
+    ARTICLE_RELEVANCE_SCORE_THRESHOLD: float = 0.7  # Only process highly relevant biotech articles
     
     # News sources
     NEWS_SOURCES: Dict[str, Dict[str, Any]] = {

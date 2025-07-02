@@ -2,7 +2,7 @@ import requests
 import time
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -12,6 +12,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 from loguru import logger
 from config import config
+import re
 
 class BaseScraper(ABC):
     """Base class for all news scrapers"""
@@ -168,3 +169,154 @@ class BaseScraper(ABC):
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit"""
         self.close_driver()
+
+    def parse_article_timestamp(self, timestamp_text: str, base_url: str = "") -> Optional[datetime]:
+        """Smart timestamp parsing with multiple format support"""
+        if not timestamp_text:
+            return datetime.now()
+        
+        # Clean the timestamp text
+        timestamp_text = timestamp_text.strip().lower()
+        current_time = datetime.now()
+        
+        # Handle relative time expressions
+        relative_patterns = [
+            (r'(\d+)\s*minutes?\s*ago', lambda m: current_time - timedelta(minutes=int(m.group(1)))),
+            (r'(\d+)\s*hours?\s*ago', lambda m: current_time - timedelta(hours=int(m.group(1)))),
+            (r'(\d+)\s*days?\s*ago', lambda m: current_time - timedelta(days=int(m.group(1)))),
+            (r'just\s*now', lambda m: current_time),
+            (r'(\d+)m\s*ago', lambda m: current_time - timedelta(minutes=int(m.group(1)))),
+            (r'(\d+)h\s*ago', lambda m: current_time - timedelta(hours=int(m.group(1)))),
+        ]
+        
+        for pattern, calculator in relative_patterns:
+            match = re.search(pattern, timestamp_text)
+            if match:
+                return calculator(match)
+        
+        # Handle absolute timestamps with various formats
+        absolute_formats = [
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d %H:%M",
+            "%Y-%m-%d",
+            "%d/%m/%Y %H:%M:%S",
+            "%d/%m/%Y %H:%M",
+            "%d/%m/%Y",
+            "%m/%d/%Y %H:%M:%S",
+            "%m/%d/%Y %H:%M",
+            "%m/%d/%Y",
+            "%B %d, %Y %H:%M:%S",
+            "%B %d, %Y %H:%M",
+            "%B %d, %Y",
+            "%b %d, %Y %H:%M:%S",
+            "%b %d, %Y %H:%M",
+            "%b %d, %Y",
+            "%d %B %Y %H:%M:%S",
+            "%d %B %Y %H:%M",
+            "%d %B %Y",
+            "%d %b %Y %H:%M:%S",
+            "%d %b %Y %H:%M",
+            "%d %b %Y",
+        ]
+        
+        # Try parsing with different formats
+        for fmt in absolute_formats:
+            try:
+                return datetime.strptime(timestamp_text, fmt)
+            except:
+                continue
+        
+        # Try extracting date parts with regex
+        date_patterns = [
+            r'(\d{4})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2}):(\d{2})',
+            r'(\d{4})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})',
+            r'(\d{4})-(\d{1,2})-(\d{1,2})',
+            r'(\d{1,2})/(\d{1,2})/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})',
+            r'(\d{1,2})/(\d{1,2})/(\d{4})\s+(\d{1,2}):(\d{2})',
+            r'(\d{1,2})/(\d{1,2})/(\d{4})',
+        ]
+        
+        for pattern in date_patterns:
+            match = re.search(pattern, timestamp_text)
+            if match:
+                try:
+                    groups = match.groups()
+                    if len(groups) == 6:  # Full datetime
+                        year, month, day, hour, minute, second = map(int, groups)
+                        return datetime(year, month, day, hour, minute, second)
+                    elif len(groups) == 5:  # Date + hour:minute
+                        year, month, day, hour, minute = map(int, groups)
+                        return datetime(year, month, day, hour, minute, 0)
+                    elif len(groups) == 3:  # Date only
+                        if pattern.startswith(r'(\d{4})'):  # YYYY-MM-DD
+                            year, month, day = map(int, groups)
+                        else:  # MM/DD/YYYY or DD/MM/YYYY
+                            month, day, year = map(int, groups)
+                        return datetime(year, month, day, 12, 0, 0)  # Default to noon
+                except:
+                    continue
+        
+        # If all else fails, return current time
+        logger.warning(f"Could not parse timestamp: {timestamp_text}")
+        return current_time
+
+    def is_article_within_time_window(self, article_time: datetime, buffer_minutes: int = 5) -> bool:
+        """Check if article is within acceptable time window for current scraping cycle"""
+        if not config.ENABLE_SMART_TIME_FILTERING:
+            return True
+        
+        current_time = datetime.now()
+        time_diff_minutes = abs((current_time - article_time).total_seconds() / 60)
+        
+        # Article is acceptable if it's within our lookback window
+        max_age_minutes = config.ARTICLE_LOOKBACK_WINDOW_MINUTES
+        
+        return time_diff_minutes <= max_age_minutes
+
+    def extract_article_metadata(self, soup, url: str) -> Dict[str, Any]:
+        """Enhanced metadata extraction with smart timestamp handling"""
+        metadata = {}
+        
+        # Try to find publication time with multiple selectors
+        time_selectors = [
+            'time[datetime]',
+            'span.timestamp',
+            'div.date',
+            'span.date',
+            'div.publish-date',
+            'span.publish-date',
+            'div.publication-date',
+            'meta[property="article:published_time"]',
+            'meta[name="publish-date"]',
+            '.article-date',
+            '.post-date',
+            '.entry-date'
+        ]
+        
+        published_date = None
+        for selector in time_selectors:
+            try:
+                time_element = soup.select_one(selector)
+                if time_element:
+                    # Try different attributes
+                    time_text = (
+                        time_element.get('datetime') or
+                        time_element.get('content') or
+                        time_element.get_text(strip=True)
+                    )
+                    
+                    if time_text:
+                        parsed_time = self.parse_article_timestamp(time_text, url)
+                        if parsed_time and self.is_article_within_time_window(parsed_time):
+                            published_date = parsed_time
+                            break
+            except Exception as e:
+                continue
+        
+        if not published_date:
+            published_date = datetime.now()
+        
+        metadata['published_date'] = published_date
+        metadata['is_recent'] = self.is_article_within_time_window(published_date)
+        
+        return metadata
