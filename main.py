@@ -8,10 +8,14 @@ extracts key information, and makes automated trading decisions.
 import asyncio
 import schedule
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time as dt_time
 from typing import List, Dict, Any
 from loguru import logger
 from sqlalchemy.orm import sessionmaker
+import random
+from sqlalchemy import and_
+import os
+import sys
 
 # Import our modules
 from config import config
@@ -80,30 +84,51 @@ class BiotechTradingSystem:
         logger.info("System stopped successfully!")
     
     def _schedule_jobs(self):
-        """Schedule all periodic jobs"""
+        """Schedule all periodic tasks with flexible timing"""
+        logger.info("Setting up job scheduling with flexible timing...")
         
-        # News scraping every 15 minutes during market hours
-        schedule.every(config.SCRAPE_INTERVAL_MINUTES).minutes.do(self._run_news_scraping)
+        # Main scraping with random offset for flexibility
+        def flexible_scraping():
+            if self._is_scraping_time():
+                offset = random.randint(0, config.SCRAPE_OFFSET_MINUTES * 60)  # Random offset in seconds
+                time.sleep(offset)
+                self._run_news_scraping()
         
-        # Process unprocessed articles every 10 minutes
-        schedule.every(10).minutes.do(self._process_unprocessed_articles)
+        # Schedule regular scraping every 10 minutes with random offset
+        schedule.every(config.SCRAPE_INTERVAL_MINUTES).minutes.do(flexible_scraping)
         
-        # Generate trading signals every 5 minutes during market hours
-        schedule.every(5).minutes.do(self._generate_trading_signals)
+        # Schedule rapid scraping during high-activity periods
+        if config.RAPID_SCRAPE_ENABLED:
+            for rapid_time in config.RAPID_SCRAPE_INTERVALS:
+                schedule.every().day.at(rapid_time.strftime("%H:%M")).do(
+                    lambda: self._run_news_scraping() if self._is_scraping_time() else None
+                )
         
-        # Execute approved trades every 2 minutes during market hours
-        schedule.every(2).minutes.do(self._execute_trades)
+        # Enhanced processing schedule - every 5 minutes
+        schedule.every(5).minutes.do(
+            lambda: self._process_unprocessed_articles() if self._is_scraping_time() else None
+        )
         
-        # Daily risk management reset
-        schedule.every().day.at("06:00").do(self.risk_manager.reset_daily_counters)
+        # Signal generation every 3 minutes during trading hours  
+        schedule.every(3).minutes.do(
+            lambda: self._generate_trading_signals() if self._is_trading_time() else None
+        )
         
-        # Daily system health check
-        schedule.every().day.at("07:00").do(self._daily_health_check)
+        # Trade execution every 2 minutes during trading hours
+        schedule.every(2).minutes.do(
+            lambda: self._execute_trades() if self._is_trading_time() else None
+        )
         
-        # Portfolio rebalancing check
-        schedule.every().hour.do(self._check_portfolio_rebalancing)
+        # Health check twice daily
+        schedule.every(12).hours.do(self._daily_health_check)
         
-        logger.info("Jobs scheduled successfully")
+        # Portfolio rebalancing check every hour during trading
+        schedule.every().hour.do(
+            lambda: self._check_portfolio_rebalancing() if self._is_trading_time() else None
+        )
+        
+        logger.info(f"Scheduled jobs: Scraping every {config.SCRAPE_INTERVAL_MINUTES}min + rapid intervals")
+        logger.info(f"Rapid scraping times: {[t.strftime('%H:%M') for t in config.RAPID_SCRAPE_INTERVALS]}")
     
     def _run_scheduler(self):
         """Run the job scheduler"""
@@ -165,14 +190,31 @@ class BiotechTradingSystem:
         logger.info(f"Scraping completed: {total_new} new articles out of {total_articles} total")
     
     def _save_articles(self, articles: List[Dict[str, Any]], source: str) -> int:
-        """Save scraped articles to database"""
+        """Save scraped articles to database with enhanced freshness filtering"""
         new_articles_count = 0
+        current_time = datetime.now()
         
         for article_data in articles:
             try:
-                # Check if article already exists
+                # Check article freshness
+                published_date = article_data.get('published_date', current_time)
+                if isinstance(published_date, str):
+                    try:
+                        published_date = datetime.strptime(published_date, "%Y-%m-%d %H:%M:%S")
+                    except:
+                        published_date = current_time
+                
+                age_hours = (current_time - published_date).total_seconds() / 3600
+                if age_hours > config.MAX_ARTICLE_AGE_HOURS:
+                    continue  # Skip old articles
+                
+                # Enhanced duplicate check
+                cutoff_time = current_time - timedelta(hours=config.DUPLICATE_CHECK_HOURS)
                 existing = self.db_session.query(Article).filter(
-                    Article.url == article_data.get('url')
+                    and_(
+                        Article.url == article_data.get('url'),
+                        Article.published_date >= cutoff_time
+                    )
                 ).first()
                 
                 if existing:
@@ -184,7 +226,7 @@ class BiotechTradingSystem:
                     summary=article_data.get('summary', ''),
                     url=article_data.get('url', ''),
                     source=source,
-                    published_date=article_data.get('published_date', datetime.now()),
+                    published_date=published_date,
                     is_biotech_relevant=article_data.get('is_biotech_relevant', False)
                 )
                 
@@ -197,6 +239,7 @@ class BiotechTradingSystem:
         
         try:
             self.db_session.commit()
+            logger.info(f"Saved {new_articles_count} fresh articles from {source}")
         except Exception as e:
             logger.error(f"Error committing articles: {e}")
             self.db_session.rollback()

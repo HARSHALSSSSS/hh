@@ -10,32 +10,47 @@ class Config(BaseSettings):
     DATABASE_URL: str = "sqlite:///biotech_trader.db"
     
     # Scraping settings
-    SCRAPE_INTERVAL_MINUTES: int = 15
-    SCRAPE_START_TIME: time = time(7, 0)  # 7:00 AM
-    SCRAPE_END_TIME: time = time(16, 0)   # 4:00 PM
+    SCRAPE_INTERVAL_MINUTES: int = 10
+    SCRAPE_START_TIME: time = time(6, 30)
+    SCRAPE_END_TIME: time = time(16, 30)
+    
+    # NEW: Flexible timing settings
+    SCRAPE_OFFSET_MINUTES: int = 2
+    RAPID_SCRAPE_ENABLED: bool = True
+    RAPID_SCRAPE_INTERVALS: List[time] = [
+        time(8, 0),
+        time(9, 30),
+        time(12, 0),
+        time(15, 0),
+        time(16, 0),
+    ]
+    
+    # Article freshness settings
+    MAX_ARTICLE_AGE_HOURS: int = 2
+    DUPLICATE_CHECK_HOURS: int = 24
     
     # News sources
     NEWS_SOURCES: Dict[str, Dict[str, Any]] = {
         "stocktitan": {
-            "base_url": "https://stocktitan.net",
-            "biotech_url": "https://stocktitan.net/biotech/",
-            "clinical_trials_url": "https://stocktitan.net/clinical-trials/",
+            "base_url": "https://www.stocktitan.net",
+            "biotech_url": "https://www.stocktitan.net/news/",
+            "clinical_trials_url": "https://www.stocktitan.net/news/",
             "enabled": True
         },
         "prnewswire": {
             "base_url": "https://www.prnewswire.com",
-            "biotech_url": "https://www.prnewswire.com/news-releases/health-care-latest-news/",
-            "rss_url": "https://www.prnewswire.com/rss/news-releases-healthcare-latest-news-list.rss",
+            "biotech_url": "https://www.prnewswire.com/news-releases/biotechnology-latest-news/biotechnology-latest-news-list/",
+            "rss_url": "https://www.prnewswire.com/rss/news-releases-biotechnology-latest-news-list.rss",
             "enabled": True
         },
         "businesswire": {
             "base_url": "https://www.businesswire.com",
-            "biotech_url": "https://www.businesswire.com/portal/site/home/news/subject/?ndmConfigId=1006863",
+            "biotech_url": "https://www.businesswire.com/news/home/technology-business-finance-news/pharmaceuticals-biotechnology",
             "enabled": True
         },
         "yahoo": {
             "base_url": "https://news.yahoo.com",
-            "biotech_url": "https://news.yahoo.com/health/biotech/",
+            "biotech_url": "https://news.yahoo.com/health/",
             "rss_url": "https://news.yahoo.com/rss/health",
             "enabled": True
         }
