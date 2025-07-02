@@ -1,48 +1,167 @@
-# Web scraping and HTTP requests
+# Core Framework Dependencies
+pydantic==2.11.7
+loguru==0.7.3
+schedule==1.2.0
+python-dotenv==1.0.0
+
+# Database
+SQLAlchemy==2.0.23
+sqlite3  # Built-in Python module
+
+# Web Scraping
 requests==2.31.0
 beautifulsoup4==4.12.2
-selenium==4.15.2
 lxml==4.9.3
-feedparser==6.0.10
+selenium==4.15.2
+webdriver-manager==4.0.1
 
-# Data processing
+# Data Processing & Analysis
 pandas==2.1.3
 numpy==1.25.2
 python-dateutil==2.8.2
+pytz==2023.3
 
-# NLP and sentiment analysis
+# Natural Language Processing
 textblob==0.17.1
-nltk==3.8.1
 transformers==4.35.2
 torch==2.1.1
+tokenizers==0.15.0
+sentencepiece==0.1.99
+nltk==3.8.1
 
-# Database
-sqlite3
-sqlalchemy==2.0.23
+# Financial Data & Trading
+alpaca-trade-api==3.1.1
+yfinance==0.2.18
+alpha-vantage==2.3.1
 
-# Trading APIs
-alpaca-trade-api==3.0.0
-yfinance==0.2.22
-
-# Scheduling and async
-schedule==1.2.0
-asyncio
+# HTTP & API Clients
+httpx==0.25.2
 aiohttp==3.9.1
+urllib3==2.1.0
 
-# Logging and monitoring
-loguru==0.7.2
-
-# Configuration
-python-dotenv==1.0.0
-pydantic==2.5.0
-
-# Email notifications
+# Email Notifications
 email-validator==2.1.0
 # smtplib is built-in to Python
+# email.mime modules are built-in to Python
 
-# Web driver for Selenium
-webdriver-manager==4.0.1
+# Scientific Computing
+scipy==1.11.4
+scikit-learn==1.3.2
 
-# Testing
+# Text Processing
+regex==2023.10.3
+markdown==3.5.1
+html2text==2020.1.16
+
+# Async Support
+asyncio  # Built-in Python module
+typing-extensions==4.8.0
+
+# Development & Testing
 pytest==7.4.3
 pytest-asyncio==0.21.1
+
+# Image Processing (for potential future chart analysis)
+Pillow==10.1.0
+
+# Additional Utilities
+colorama==0.4.6
+tqdm==4.66.1
+packaging==23.2
+six==1.16.0
+charset-normalizer==3.3.2
+idna==3.4
+certifi==2023.11.17
+
+# Financial Analysis Libraries
+TA-Lib==0.4.28  # Technical analysis indicators
+matplotlib==3.8.2  # For potential chart generation
+plotly==5.17.0  # Interactive charts
+
+# Cache & Performance
+cachetools==5.3.2
+diskcache==5.6.3
+
+# Error Handling & Monitoring
+sentry-sdk==1.38.0
+
+# Configuration Management
+configparser  # Built-in Python module
+json  # Built-in Python module
+yaml  # For potential config files
+PyYAML==6.0.1
+
+# Time & Date Handling
+arrow==1.3.0
+pendulum==2.1.2
+
+# Parallel Processing
+concurrent.futures  # Built-in Python module
+multiprocessing  # Built-in Python module
+threading  # Built-in Python module
+
+# System & OS Interaction
+psutil==5.9.6
+platform  # Built-in Python module
+sys  # Built-in Python module
+os  # Built-in Python module
+
+# Data Validation
+marshmallow==3.20.1
+cerberus==1.3.5
+
+# RSS Feed Processing
+feedparser==6.0.10
+
+# HTML/XML Processing
+html.parser  # Built-in Python module
+xml.etree.ElementTree  # Built-in Python module
+
+# Random & Math
+random  # Built-in Python module
+math  # Built-in Python module
+statistics  # Built-in Python module
+
+# Compression & Archives
+zipfile  # Built-in Python module
+gzip  # Built-in Python module
+
+# Hashing & Security
+hashlib  # Built-in Python module
+hmac  # Built-in Python module
+secrets  # Built-in Python module
+ssl  # Built-in Python module
+
+# File & Path Operations
+pathlib  # Built-in Python module
+shutil  # Built-in Python module
+tempfile  # Built-in Python module
+glob  # Built-in Python module
+
+# Networking
+socket  # Built-in Python module
+ipaddress  # Built-in Python module
+
+# Encoding & Decoding
+base64  # Built-in Python module
+binascii  # Built-in Python module
+
+# Collections & Data Structures
+collections  # Built-in Python module
+itertools  # Built-in Python module
+functools  # Built-in Python module
+
+# Process & Signal Handling
+signal  # Built-in Python module
+subprocess  # Built-in Python module
+
+# Memory Management
+gc  # Built-in Python module
+weakref  # Built-in Python module
+
+# Debugging & Inspection
+inspect  # Built-in Python module
+traceback  # Built-in Python module
+
+# Version Information
+__future__  # Built-in Python module
