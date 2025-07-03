@@ -250,7 +250,7 @@ class BiotechTradingSystem:
                     url=article_data.get('url', ''),
                     source=source,
                     published_date=published_date,
-                    is_biotech_relevant=article_data.get('is_biotech_relevant', False)
+                    is_biotech_relevant=True  # Set to True for all articles now that filtering is disabled
                 )
                 
                 # Store relevance score in the article (if your Article model supports it)
@@ -303,10 +303,10 @@ class BiotechTradingSystem:
         """Process articles that haven't been analyzed yet"""
         logger.info("Processing unprocessed articles...")
         
-        # Get unprocessed biotech-relevant articles
+        # Get unprocessed articles (removed biotech filter for broader processing)
         unprocessed_articles = self.db_session.query(Article).filter(
-            Article.is_processed == False,
-            Article.is_biotech_relevant == True
+            Article.is_processed == False
+            # Removed is_biotech_relevant filter to process all articles
         ).limit(50).all()  # Process in batches
         
         if not unprocessed_articles:
@@ -391,7 +391,7 @@ class BiotechTradingSystem:
         recent_articles = self.db_session.query(Article).filter(
             Article.published_date >= cutoff_time,
             Article.is_processed == True,
-            Article.is_biotech_relevant == True,
+            # Removed is_biotech_relevant check for broader signal generation
             Article.company_ticker.isnot(None)
         ).all()
         
