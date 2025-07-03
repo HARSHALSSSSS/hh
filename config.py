@@ -1,7 +1,41 @@
 import os
 from typing import List, Dict, Any
-from pydantic import BaseSettings, validator
 from datetime import time
+
+try:
+    from pydantic import BaseSettings, validator
+except ImportError:
+    # For newer pydantic versions
+    try:
+        from pydantic_settings import BaseSettings
+        from pydantic import validator
+    except ImportError:
+        # Fallback for basic configuration without pydantic
+        class BaseSettings:
+            def __init__(self):
+                # Load from environment variables
+                for key, value in self.__class__.__annotations__.items():
+                    env_value = os.getenv(key)
+                    if env_value is not None:
+                        # Try to convert to the correct type
+                        if hasattr(value, '__origin__') and value.__origin__ is list:
+                            setattr(self, key, env_value.split(','))
+                        elif value is bool:
+                            setattr(self, key, env_value.lower() in ('true', '1', 'yes'))
+                        elif value is int:
+                            setattr(self, key, int(env_value))
+                        elif value is float:
+                            setattr(self, key, float(env_value))
+                        else:
+                            setattr(self, key, env_value)
+                    elif hasattr(self.__class__, key):
+                        # Use default value
+                        setattr(self, key, getattr(self.__class__, key))
+        
+        def validator(*args, **kwargs):
+            def decorator(func):
+                return func
+            return decorator
 
 class Config(BaseSettings):
     """Configuration settings for the biotech trading system"""
@@ -16,8 +50,8 @@ class Config(BaseSettings):
     
     # SMART ARTICLE TIME WINDOW SYSTEM
     ARTICLE_TIME_BUFFER_MINUTES: int = 5  # Look for articles released 5 min before/after our scraping
-    ARTICLE_LOOKBACK_WINDOW_MINUTES: int = 20  # Total window: last 20 minutes (15 + 5 buffer)
-    ENABLE_SMART_TIME_FILTERING: bool = True  # Enable intelligent time-based article filtering
+    ARTICLE_LOOKBACK_WINDOW_MINUTES: int = 1440  # Total window: last 24 hours (was 20 minutes)
+    ENABLE_SMART_TIME_FILTERING: bool = False  # Disable time filtering for testing (was True)
     
     # Enhanced timing settings for article detection
     SCRAPE_OFFSET_SECONDS: int = 30  # Small random offset (30 seconds max) to avoid exact timing conflicts
@@ -25,9 +59,9 @@ class Config(BaseSettings):
     RAPID_SCRAPE_INTERVALS: List[time] = []  # Empty - no rapid scraping
     
     # Article freshness and relevance settings  
-    MAX_ARTICLE_AGE_HOURS: int = 2  # Only process articles published within last 2 hours
+    MAX_ARTICLE_AGE_HOURS: int = 24  # Only process articles published within last 24 hours (was 2)
     DUPLICATE_CHECK_HOURS: int = 24  # Check for duplicates within 24 hours
-    ARTICLE_RELEVANCE_SCORE_THRESHOLD: float = 0.7  # Only process highly relevant biotech articles
+    ARTICLE_RELEVANCE_SCORE_THRESHOLD: float = 0.0  # Process ALL articles for testing (was 0.7)
     
     # News sources
     NEWS_SOURCES: Dict[str, Dict[str, Any]] = {
