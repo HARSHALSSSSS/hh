@@ -428,49 +428,42 @@ class BiotechExtractor:
         return info
     
     def get_market_data(self, ticker: str) -> Dict[str, Any]:
-        """Get real-time market data for a ticker"""
+        """Get real-time market data for a ticker – with basic retry to avoid 429s"""
         if ticker in self.company_cache:
             return self.company_cache[ticker]
-        
-        try:
-            stock = yf.Ticker(ticker)
-            info_data = stock.info
-            
-            market_data = {}
-            
-            # Extract key financial metrics
-            if 'marketCap' in info_data:
-                market_data['market_cap'] = info_data['marketCap']
-            
-            if 'fullTimeEmployees' in info_data:
-                market_data['employee_count'] = info_data['fullTimeEmployees']
-            
-            if 'currentPrice' in info_data:
-                market_data['current_price'] = info_data['currentPrice']
-            
-            if 'volume' in info_data:
-                market_data['volume'] = info_data['volume']
-            
-            if 'averageVolume' in info_data:
-                market_data['avg_volume'] = info_data['averageVolume']
-            
-            if 'beta' in info_data:
-                market_data['beta'] = info_data['beta']
-            
-            if 'sector' in info_data:
-                market_data['sector'] = info_data['sector']
-            
-            if 'industry' in info_data:
-                market_data['industry'] = info_data['industry']
-            
-            # Cache the result
-            self.company_cache[ticker] = market_data
-            
-            return market_data
-            
-        except Exception as e:
-            logger.error(f"Failed to get market data for {ticker}: {e}")
-            return {}
+
+        import time
+        max_attempts = 3
+        for attempt in range(1, max_attempts + 1):
+            try:
+                stock = yf.Ticker(ticker)
+                info_data = stock.info  # This is where 429 errors happen
+
+                market_data = {}
+
+                # Extract key financial metrics
+                market_data['market_cap']      = info_data.get('marketCap')
+                market_data['employee_count']  = info_data.get('fullTimeEmployees')
+                market_data['current_price']   = info_data.get('currentPrice')
+                market_data['volume']          = info_data.get('volume')
+                market_data['avg_volume']      = info_data.get('averageVolume')
+                market_data['beta']            = info_data.get('beta')
+                market_data['sector']          = info_data.get('sector')
+                market_data['industry']        = info_data.get('industry')
+
+                # Cache the result
+                self.company_cache[ticker] = market_data
+                return market_data
+
+            except Exception as e:
+                if '429' in str(e) and attempt < max_attempts:
+                    # Too many requests – wait and retry
+                    wait = 5 * attempt  # progressive back-off
+                    logger.warning(f"Yahoo 429 for {ticker}. Retrying in {wait}s (attempt {attempt}/{max_attempts})")
+                    time.sleep(wait)
+                    continue
+                logger.error(f"Failed to get market data for {ticker}: {e}")
+                return {}
     
     def _is_valid_company_name(self, name: str) -> bool:
         """Validate if a string looks like a company name"""

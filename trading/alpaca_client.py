@@ -49,15 +49,20 @@ class AlpacaClient:
         
         try:
             account = self.api.get_account()
+            # Convert the Pydantic Account model to a plain dict so we
+            # don't accidentally access missing attributes when the SDK changes.
+            # `__dict__` is available on both old and new SDK versions.
+            acc_dict = account.__dict__ if hasattr(account, "__dict__") else dict(account)
+
+            # Build a safe, backward-compatible response dict
             return {
-                'account_id': account.id,
-                'status': account.status,
-                'cash': float(account.cash),
-                'buying_power': float(account.buying_power),
-                'portfolio_value': float(account.portfolio_value),
-                'equity': float(account.equity),
-                'day_trade_count': account.daytrade_buying_power,
-                'pattern_day_trader': account.pattern_day_trader
+                'account_id': acc_dict.get('id'),
+                'status': acc_dict.get('status'),
+                'cash': float(acc_dict.get('cash', 0)),
+                'buying_power': float(acc_dict.get('buying_power', 0)),
+                'portfolio_value': float(acc_dict.get('portfolio_value', 0)),
+                'equity': float(acc_dict.get('equity', 0)),
+                'pattern_day_trader': acc_dict.get('pattern_day_trader', False)
             }
         except Exception as e:
             logger.error(f"Error getting account info: {e}")
