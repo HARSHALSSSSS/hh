@@ -118,6 +118,9 @@ class Config(BaseSettings):
     HEADLESS_BROWSER: bool = True
     BROWSER_TIMEOUT: int = 30
     
+    # Timezone setting
+    TIMEZONE: str = "UTC"  # Set your local timezone e.g., "US/Eastern"
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

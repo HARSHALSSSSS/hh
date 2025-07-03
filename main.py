@@ -98,8 +98,12 @@ class BiotechTradingSystem:
                     time.sleep(offset)
                 self._run_news_scraping()
         
-        # Schedule regular scraping every 15 minutes as requested
-        schedule.every(config.SCRAPE_INTERVAL_MINUTES).minutes.do(smart_scraping)
+        # Remove interval-based scheduling and replace with fixed quarter-hour marks
+        # Schedule scraping at exact quarter-hour marks (:00, :15, :30, :45)
+        fixed_quarter_marks = [":00", ":15", ":30", ":45"]
+
+        for mark in fixed_quarter_marks:
+            schedule.every().hour.at(mark).do(smart_scraping)
         
         # Enhanced processing schedule - every 5 minutes to process any articles we found
         schedule.every(5).minutes.do(
