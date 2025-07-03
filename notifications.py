@@ -330,5 +330,40 @@ class EmailNotifier:
         
         return html
 
+    # ------------------------------------------------------------------
+    # NEW: DETAILED ARTICLE EMAIL (one e-mail per processed article)
+    # ------------------------------------------------------------------
+    def send_article_details_alert(self, article: Dict[str, Any]):
+        """Send a single e-mail containing all extracted details for one article."""
+        if not config.ENABLE_EMAIL_NOTIFICATIONS or not config.SEND_NEW_ARTICLES_ALERTS:
+            return
+
+        title   = article.get('title', 'No title')
+        url     = article.get('url', '')
+        pubdate = article.get('published_date')
+        pubdate = pubdate.strftime("%Y-%m-%d %H:%M") if pubdate else "N/A"
+
+        subject = f"[Biotech Trader] 📰 Article Details: {title[:60]}"
+
+        body_lines = [
+            f"📰  TITLE: {title}",
+            f"📅  Published: {pubdate}",
+            f"🔗  URL: {url}",
+            "",
+            "------ EXTRACTED INFORMATION ------",
+            f"🏢 Company Name : {article.get('company_name', 'N/A')}",
+            f"💲 Ticker       : {article.get('company_ticker', 'N/A')}",
+            f"📊 Sentiment    : {article.get('sentiment_label', 'neutral')} (score {article.get('sentiment_score', 0):.2f})",
+            f"📈 P-Value      : {article.get('p_value', 'N/A')}",
+            f"🧪 Trial Phase  : {article.get('trial_phase', 'N/A')}",
+            f"✅ Approval     : {article.get('approval_status', 'N/A')}",
+            "",
+            "------ SUMMARY ------",
+            article.get('summary', 'No summary provided')[:1000]  # cap length
+        ]
+
+        body = "\n".join(body_lines)
+        self.send_email(subject, body)
+
 # Global instance
 email_notifier = EmailNotifier()

@@ -188,6 +188,11 @@ class BiotechTradingSystem:
                 )
         
         self.last_scrape_time = datetime.now()
+        # Immediately process any newly saved articles so details are extracted right away
+        try:
+            self._process_unprocessed_articles()
+        except Exception as e:
+            logger.error(f"Immediate article processing failed: {e}")
         logger.info(f"Scraping completed: {total_new} new articles out of {total_articles} total")
     
     def _save_articles(self, articles: List[Dict[str, Any]], source: str) -> int:
@@ -367,6 +372,24 @@ class BiotechTradingSystem:
                 
                 # Mark as processed
                 article.is_processed = True
+                
+                # Send a detailed email for this processed article
+                try:
+                    email_notifier.send_article_details_alert({
+                        'title': article.title,
+                        'summary': article.summary,
+                        'url': article.url,
+                        'published_date': article.published_date,
+                        'company_name': article.company_name,
+                        'company_ticker': article.company_ticker,
+                        'sentiment_score': article.sentiment_score,
+                        'sentiment_label': article.sentiment_label,
+                        'p_value': article.p_value,
+                        'trial_phase': article.trial_phase,
+                        'approval_status': article.approval_status
+                    })
+                except Exception as e:
+                    logger.error(f"Failed to send article details email: {e}")
                 
             except Exception as e:
                 logger.error(f"Error processing article {article.id}: {e}")
