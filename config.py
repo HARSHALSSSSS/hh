@@ -32,14 +32,18 @@ class Config(BaseSettings):
     # News sources
     NEWS_SOURCES: Dict[str, Dict[str, Any]] = {
         "stocktitan": {
-            "base_url": "https://www.stocktitan.net",
-            "biotech_url": "https://www.stocktitan.net/news/",
-            "clinical_trials_url": "https://www.stocktitan.net/news/",
+            "base_url": "https://www.stocktitan.net/news/live.html",
+            "fda_approvals_url": "https://www.stocktitan.net/news/fda-approvals.html",
+            "clinical_trials_url": "https://www.stocktitan.net/news/clinical-trials.html",
             "enabled": True
         },
         "prnewswire": {
             "base_url": "https://www.prnewswire.com",
-            "biotech_url": "https://www.prnewswire.com/news-releases/biotechnology-latest-news/biotechnology-latest-news-list/",
+            "health_url": "https://www.prnewswire.com/news-releases/health-latest-news/",
+            "clinical_trials_url": "https://www.prnewswire.com/news-releases/health-latest-news/clinical-trials-medical-discoveries-list/",
+            "fda_approval_url": "https://www.prnewswire.com/news-releases/health-latest-news/fda-approval-list/",
+            "biotechnology_url": "https://www.prnewswire.com/news-releases/health-latest-news/biotechnology-list/",
+            "pharmaceuticals_url": "https://www.prnewswire.com/news-releases/health-latest-news/pharmaceuticals-list/",
             "rss_url": "https://www.prnewswire.com/rss/news-releases-biotechnology-latest-news-list.rss",
             "enabled": True
         },

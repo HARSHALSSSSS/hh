@@ -12,32 +12,37 @@ class PRNewswireScraper(BaseScraper):
     
     def __init__(self):
         super().__init__("prnewswire")
-        self.base_url = config.NEWS_SOURCES["prnewswire"]["base_url"]
-        self.biotech_url = config.NEWS_SOURCES["prnewswire"]["biotech_url"]
-        self.rss_url = config.NEWS_SOURCES["prnewswire"]["rss_url"]
-    
+        self.urls = [
+            config.NEWS_SOURCES["prnewswire"]["health_url"],
+            config.NEWS_SOURCES["prnewswire"]["clinical_trials_url"],
+            config.NEWS_SOURCES["prnewswire"]["fda_approval_url"],
+            config.NEWS_SOURCES["prnewswire"]["biotechnology_url"],
+            config.NEWS_SOURCES["prnewswire"]["pharmaceuticals_url"],
+        ]
+
     def scrape_articles(self) -> List[Dict[str, Any]]:
-        """Scrape articles from PR Newswire RSS feed and webpage"""
+        """Scrape articles from PR Newswire all relevant sections and RSS feed"""
         articles = []
+
+        # Scrape all relevant web sections
+        for url in self.urls:
+            articles.extend(self._scrape_webpage(url))
         
-        # First try RSS feed
+        # Optionally, also include RSS feed if you want
         rss_articles = self._scrape_rss_feed()
         articles.extend(rss_articles)
-        
-        # Then scrape webpage for additional articles
-        web_articles = self._scrape_webpage()
-        articles.extend(web_articles)
-        
-        # Remove duplicates based on URL
+
+        # Remove duplicates by URL
         seen_urls = set()
         unique_articles = []
         for article in articles:
-            if article.get('url') not in seen_urls:
-                seen_urls.add(article.get('url'))
+            url = article.get('url')
+            if url and url not in seen_urls:
+                seen_urls.add(url)
                 unique_articles.append(article)
-        
+
         return unique_articles
-    
+
     def _scrape_rss_feed(self) -> List[Dict[str, Any]]:
         """Scrape articles from RSS feed"""
         articles = []
@@ -53,13 +58,6 @@ class PRNewswireScraper(BaseScraper):
                     'summary': self.clean_text(entry.get('summary', '')),
                     'published_date': self._parse_rss_date(entry.get('published', '')),
                 }
-                
-                # Check biotech relevance
-                article['is_biotech_relevant'] = self.is_biotech_relevant(
-                    article['title'], 
-                    article['summary']
-                )
-                
                 if self.validate_article(article):
                     articles.append(article)
                     
@@ -68,11 +66,11 @@ class PRNewswireScraper(BaseScraper):
         
         return articles
     
-    def _scrape_webpage(self) -> List[Dict[str, Any]]:
+    def _scrape_webpage(self, url: str) -> List[Dict[str, Any]]:
         """Scrape articles from PR Newswire healthcare webpage"""
         articles = []
         
-        soup = self.get_soup(self.biotech_url, use_selenium=True)
+        soup = self.get_soup(url, use_selenium=True)
         if not soup:
             return articles
         
@@ -150,12 +148,6 @@ class PRNewswireScraper(BaseScraper):
         
         if 'published_date' not in article:
             article['published_date'] = datetime.now()
-        
-        # Check biotech relevance
-        article['is_biotech_relevant'] = self.is_biotech_relevant(
-            article.get('title', ''), 
-            article.get('summary', '')
-        )
         
         return article
     

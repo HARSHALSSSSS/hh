@@ -41,10 +41,8 @@ class YahooScraper(BaseScraper):
     def _scrape_rss_feed(self) -> List[Dict[str, Any]]:
         """Scrape articles from Yahoo RSS feed"""
         articles = []
-        
         try:
             feed = feedparser.parse(self.rss_url)
-            
             for entry in feed.entries[:30]:  # Limit to recent articles
                 article = {
                     'source': self.source_name,
@@ -53,31 +51,18 @@ class YahooScraper(BaseScraper):
                     'summary': self.clean_text(entry.get('summary', '')),
                     'published_date': self._parse_rss_date(entry.get('published', '')),
                 }
-                
-                # Check biotech relevance
-                article['is_biotech_relevant'] = self.is_biotech_relevant(
-                    article['title'], 
-                    article['summary']
-                )
-                
-                # Only include biotech-relevant articles from RSS
-                if article['is_biotech_relevant'] and self.validate_article(article):
+                if self.validate_article(article):
                     articles.append(article)
-                    
         except Exception as e:
             logger.error(f"Error parsing Yahoo RSS feed: {e}")
-        
         return articles
     
     def _scrape_webpage(self) -> List[Dict[str, Any]]:
         """Scrape articles from Yahoo biotech webpage"""
         articles = []
-        
         soup = self.get_soup(self.biotech_url, use_selenium=True)
         if not soup:
             return articles
-        
-        # Yahoo uses specific CSS classes for articles
         article_selectors = [
             'div[data-test-locator="stream-item"]',
             '.js-stream-content',
@@ -86,18 +71,14 @@ class YahooScraper(BaseScraper):
             'article',
             '.news-article'
         ]
-        
         article_containers = []
         for selector in article_selectors:
             containers = soup.select(selector)
             if containers:
                 article_containers = containers
                 break
-        
-        # Fallback: look for h3 elements which often contain article titles
         if not article_containers:
             article_containers = soup.find_all('h3')
-        
         for container in article_containers[:25]:  # Limit to recent articles
             try:
                 article = self._extract_article_from_container(container)
@@ -106,7 +87,6 @@ class YahooScraper(BaseScraper):
             except Exception as e:
                 logger.error(f"Error extracting article from container: {e}")
                 continue
-        
         self.rate_limit(1.0)
         return articles
     
@@ -115,8 +95,6 @@ class YahooScraper(BaseScraper):
         article = {
             'source': self.source_name
         }
-        
-        # Extract title
         title_selectors = [
             'h3',
             'h2',
@@ -125,7 +103,6 @@ class YahooScraper(BaseScraper):
             '.headline',
             'a'
         ]
-        
         title_elem = None
         for selector in title_selectors:
             if isinstance(container, BeautifulSoup):
@@ -134,11 +111,8 @@ class YahooScraper(BaseScraper):
                 title_elem = container.find(selector.replace('.', ''), class_=selector[1:] if selector.startswith('.') else None) or container.select_one(selector)
             if title_elem:
                 break
-        
         if title_elem:
             article['title'] = self.clean_text(self.extract_text(title_elem))
-            
-            # Extract URL
             if title_elem.name == 'a':
                 article['url'] = self._make_absolute_url(title_elem.get('href', ''))
             else:
@@ -146,11 +120,8 @@ class YahooScraper(BaseScraper):
                 if link_elem:
                     article['url'] = self._make_absolute_url(link_elem.get('href', ''))
         elif container.name == 'a':
-            # Container itself is a link
             article['url'] = self._make_absolute_url(container.get('href', ''))
             article['title'] = self.clean_text(self.extract_text(container))
-        
-        # Extract summary/description
         summary_selectors = [
             '.summary',
             '.excerpt',
@@ -158,7 +129,6 @@ class YahooScraper(BaseScraper):
             '.teaser',
             'p'
         ]
-        
         for selector in summary_selectors:
             if isinstance(container, BeautifulSoup):
                 summary_elem = container.select_one(selector)
@@ -166,12 +136,9 @@ class YahooScraper(BaseScraper):
                 summary_elem = container.find(selector.replace('.', ''), class_=selector[1:] if selector.startswith('.') else None) or container.select_one(selector)
             if summary_elem:
                 summary_text = self.clean_text(self.extract_text(summary_elem))
-                # Only use summary if it's substantial
                 if len(summary_text) > 50:
                     article['summary'] = summary_text
                     break
-        
-        # Extract date
         date_selectors = [
             'time',
             '.date',
@@ -179,7 +146,6 @@ class YahooScraper(BaseScraper):
             '.timestamp',
             '[data-test-locator="published-date"]'
         ]
-        
         for selector in date_selectors:
             if isinstance(container, BeautifulSoup):
                 date_elem = container.select_one(selector)
@@ -189,16 +155,8 @@ class YahooScraper(BaseScraper):
                 date_str = date_elem.get('datetime') or self.extract_text(date_elem)
                 article['published_date'] = self.extract_date(date_str)
                 break
-        
         if 'published_date' not in article:
             article['published_date'] = datetime.now()
-        
-        # Check biotech relevance
-        article['is_biotech_relevant'] = self.is_biotech_relevant(
-            article.get('title', ''), 
-            article.get('summary', '')
-        )
-        
         return article
     
     def extract_article_details(self, article_url: str) -> Dict[str, Any]:

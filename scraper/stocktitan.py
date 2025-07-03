@@ -11,55 +11,52 @@ class StockTitanScraper(BaseScraper):
     
     def __init__(self):
         super().__init__("stocktitan")
-        self.biotech_url = config.NEWS_SOURCES["stocktitan"]["biotech_url"]
-        self.clinical_trials_url = config.NEWS_SOURCES["stocktitan"]["clinical_trials_url"]
+        self.urls = [
+            config.NEWS_SOURCES["stocktitan"]["base_url"],
+            config.NEWS_SOURCES["stocktitan"]["fda_approvals_url"],
+            config.NEWS_SOURCES["stocktitan"]["clinical_trials_url"],
+        ]
     
     def scrape_articles(self) -> List[Dict[str, Any]]:
-        """Scrape articles from StockTitan biotech and clinical trials sections"""
+        """Scrape articles from all relevant StockTitan sections (no keyword filtering)"""
         articles = []
-        
-        # Scrape biotech section
-        biotech_articles = self._scrape_section(self.biotech_url, "biotech")
-        articles.extend(biotech_articles)
-        
-        # Scrape clinical trials section
-        clinical_articles = self._scrape_section(self.clinical_trials_url, "clinical_trials")
-        articles.extend(clinical_articles)
-        
-        return articles
+        for url in self.urls:
+            articles.extend(self._scrape_section(url))
+        # Remove duplicates by URL
+        seen_urls = set()
+        unique_articles = []
+        for article in articles:
+            url = article.get('url')
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                unique_articles.append(article)
+        return unique_articles
     
-    def _scrape_section(self, url: str, section: str) -> List[Dict[str, Any]]:
-        """Scrape a specific section of StockTitan"""
+    def _scrape_section(self, url: str) -> List[Dict[str, Any]]:
         articles = []
-        
         soup = self.get_soup(url, use_selenium=True)
         if not soup:
             return articles
-        
         # Find article containers
         article_containers = soup.find_all('div', class_=['article-item', 'news-item', 'post-item'])
-        
         if not article_containers:
-            # Fallback: look for any links with article patterns
             article_containers = soup.find_all('a', href=re.compile(r'/news/|/article/|/post/'))
-        
-        for container in article_containers[:20]:  # Limit to recent articles
+        for container in article_containers[:20]:
             try:
-                article = self._extract_article_from_container(container, section)
+                article = self._extract_article_from_container(container, url)
                 if article and self.validate_article(article):
                     articles.append(article)
             except Exception as e:
                 logger.error(f"Error extracting article from container: {e}")
                 continue
-        
         self.rate_limit(1.0)
         return articles
     
-    def _extract_article_from_container(self, container, section: str) -> Dict[str, Any]:
+    def _extract_article_from_container(self, container, url: str) -> Dict[str, Any]:
         """Extract article data from a container element"""
         article = {
             'source': self.source_name,
-            'section': section
+            'url': url
         }
         
         # Extract title
@@ -103,12 +100,6 @@ class StockTitanScraper(BaseScraper):
             article['published_date'] = self.extract_date(date_str)
         else:
             article['published_date'] = datetime.now()
-        
-        # Check biotech relevance
-        article['is_biotech_relevant'] = self.is_biotech_relevant(
-            article.get('title', ''), 
-            article.get('summary', '')
-        )
         
         return article
     
