@@ -8,7 +8,7 @@ extracts key information, and makes automated trading decisions.
 import asyncio
 import schedule
 import time
-from datetime import datetime, timedelta, time as dt_time
+from datetime import datetime, timedelta, time as dt_time, timezone
 from typing import List, Dict, Any
 from loguru import logger
 from sqlalchemy.orm import sessionmaker
@@ -16,6 +16,7 @@ import random
 from sqlalchemy import and_
 import os
 import sys
+import pytz
 
 # Import our modules
 from config import config
@@ -195,7 +196,7 @@ class BiotechTradingSystem:
         
         for article_data in articles:
             try:
-                # Parse article published time
+                # Parse article published time with timezone handling
                 published_date = article_data.get('published_date', current_time)
                 if isinstance(published_date, str):
                     try:
@@ -205,6 +206,12 @@ class BiotechTradingSystem:
                             published_date = datetime.strptime(published_date, "%Y-%m-%d")
                         except:
                             published_date = current_time
+                
+                # Ensure both datetimes are timezone-naive for comparison
+                if published_date.tzinfo is not None:
+                    published_date = published_date.replace(tzinfo=None)
+                if current_time.tzinfo is not None:
+                    current_time = current_time.replace(tzinfo=None)
                 
                 # Check if article is within our smart time window
                 if not self._is_article_in_time_window(published_date, current_time):

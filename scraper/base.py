@@ -37,8 +37,10 @@ class BaseScraper(ABC):
             chrome_options.add_argument("--window-size=1920,1080")
             
             try:
+                from selenium.webdriver.chrome.service import Service
+                service = Service(ChromeDriverManager().install())
                 self.driver = webdriver.Chrome(
-                    ChromeDriverManager().install(),
+                    service=service,
                     options=chrome_options
                 )
                 self.driver.set_page_load_timeout(config.BROWSER_TIMEOUT)
